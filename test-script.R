@@ -58,7 +58,11 @@ full
 #report selection method
 stepAIC(null, scope = list(upper = full), 
         direction = "forward", k = 2)
-#AIC appears to just be selecting the full model
+stepAIC(full, direction = "backward", k = 2)
+stepAIC(null, scope = list(upper = full), 
+        direction="both", k=2)
+#AIC appears to just be selecting the full model or nearly full
+
 
 
 
