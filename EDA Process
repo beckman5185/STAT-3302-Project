@@ -1,0 +1,467 @@
+```{r}
+
+library(tidyverse)
+library(dobson)
+library(dplyr)
+library(GGally)
+
+```
+
+```{r}
+
+tuesdata <- tidytuesdayR::tt_load('2022-04-12')
+
+fuel_gdp <- tuesdata$fuel_gdp #fuel_gdp
+death_source <- tuesdata$death_source #death_source
+
+```
+
+```{r}
+
+pollution_deaths <- merge(fuel_gdp, death_source, by=c('Entity', 'Year', 'Code'))
+pollution_deaths <- pollution_deaths %>% rename('Clean_Fuel_Access_Percent' = 'Access to clean fuels and technologies for cooking (% of population)',  
+                                                'GDP_Per_Capita' = 'GDP per capita, PPP (constant 2017 international $)' ,
+                                                'Population'= 'Population (historical estimates)', 
+                                                'Deaths_Per_100000' = 'Deaths - Cause: All causes - Risk: Household air pollution from solid fuels - Sex: Both - Age: Age-standardized (Rate)', 
+                                                'Country' = 'Entity')
+pollution_deaths <- subset(pollution_deaths, select = -c(Continent))
+
+#deaths is per 100000
+pollution_deaths <- pollution_deaths[!is.na(pollution_deaths$Code),]
+pollution_deaths <- na.omit(pollution_deaths)
+
+```
+
+```{r}
+
+#scale GDP by thousands
+#scale population by millions
+#truncate decimal portion of deaths per 100000
+pollution_deaths <- pollution_deaths %>% mutate(Population = Population/1000000, GDP_Per_Capita = GDP_Per_Capita/1000, Deaths_Per_100000 = as.integer(Deaths_Per_100000))
+pollution_deaths <- subset(pollution_deaths, select = -Code)
+
+# View(pollution_deaths)
+
+```
+
+```{r}
+
+library(MASS)
+null = glm(Deaths_Per_100000 ~ 1, family= 'poisson', data=pollution_deaths)
+null
+
+full = glm(Deaths_Per_100000 ~ Year * Clean_Fuel_Access_Percent * 
+             GDP_Per_Capita * Population, data=pollution_deaths, 
+           family= 'poisson')
+full
+
+```
+
+```{r}
+
+#check diagnostics for dispersion parameter
+#check about how to fit GLM - scale, as integer (counts vs. rates)
+
+#can use stepAIC, look at plots to verify
+#report selection method
+stepAIC(null, scope = list(upper = full), 
+        direction = "forward", k = 2)
+stepAIC(full, direction = "backward", k = 2)
+stepAIC(null, scope = list(upper = full), 
+        direction="both", k=2)
+#AIC appears to just be selecting the full model or nearly full
+
+```
+
+Start of EDA Process
+----------------------
+
+From stepAIC, the model below is what was found to be the best fit model for
+our data.
+
+```{r}
+
+# Making variable name smaller for GGPairs plot
+Deaths_Per_100k <- pollution_deaths$Deaths_Per_100000
+Clean_Fuel_Percent <- pollution_deaths$Clean_Fuel_Access_Percent
+
+# Showing the model that will be used for the EDA process
+model = glm(formula = Deaths_Per_100k ~ Year * Clean_Fuel_Percent * 
+    GDP_Per_Capita * Population, family = "poisson", data = pollution_deaths)
+
+model
+
+```
+
+First, we can ask how do these variables play on each other. Is there any
+correlation amongst these variables and how linear are they to one another.
+
+```{r}
+
+# Pairs plot to show correlation between the 5 variables
+ggpairs(model, columns = c(1,2,3,4,5), upper = list(continuous = wrap("cor", size = 5))) +
+  theme(strip.text.x = element_text(size = 8),
+        strip.text.y = element_text(size = 5.5))
+
+```
+
+Looking at each pair of variables, almost every pair has no correlation
+whatsoever. Three pairs do stick out though that we can look into further.
+
+$\bullet$ Clean_Fuel_Percent and Deaths_Per_100k (-0.902)
+$\bullet$ GDP_Per_Capita and Deaths_Per_100k (-0.573)
+$\bullet$ GDP_Per_Capita and Clean_Fuel_Percent (0.657)
+
+Only 3 of the variables have some sort of correlation between them while the
+other two (Year and Population) have almost zero correlation to any other
+variable, which could be expected.
+
+```{r}
+
+# Each of the variables plotted against each other to see closer how they relate
+# Correlation value is in the parenthesis
+par(mfrow = c(1, 3))
+plot(pollution_deaths$Clean_Fuel_Access_Percent, pollution_deaths$Deaths_Per_100000, xlab = "Clean Fuel Access %", ylab = "Deaths per 100k", main = "Clean Fuel vs. Deaths ~ (-0.902)")
+plot(pollution_deaths$GDP_Per_Capita, pollution_deaths$Deaths_Per_100000, xlab = "GDP per Capita", ylab = "Deaths per 100k", main = "GDP vs. Deaths ~ (-0.573)")
+plot(pollution_deaths$Clean_Fuel_Access_Percent, pollution_deaths$GDP_Per_Capita, xlab = " Clean Fuel Access %", ylab = "GDP per Capita", main = "Clean Fuel vs. GDP ~ (0.657)")
+
+```
+
+From the pairs of variables with correlation, two have negative and one has postive.
+
+Clean Fuel vs. Deaths per 100k sees almost a perfect negative correlation. So,
+as clean fuel access goes up, deaths go down which gives us further insight and
+verification that cleaner fuels is fact the way to go. And, since we have a -0.900
+coefficient, their relation is very strong and that is seen in plot 1.
+
+As for the other two, their correlations are around the ~0.500 mark, showing there
+is some pull between each variable but it isn't very strong.
+
+Looking deeper into each of these three plots, there are some outliers that stick
+out and make the trend look funky. So, let's take a look into the data sets to
+see if we can sniff out what those data points relate to.
+
+```{r}
+
+country_above_400 <- pollution_deaths %>%
+     filter(Deaths_Per_100000 >= 400) %>%
+     pull(Country)
+
+   # Print the result
+   print(country_above_400)
+
+```
+
+Looking into plot 1 to see where the Deaths per 100k go above 400, we see that
+the Solomon Islands have the highest death rate out of all the countries and 
+it is an outlier from the rest.
+
+```{r}
+
+clean_fuel_above_400 <- pollution_deaths %>%
+     filter(Deaths_Per_100000 >= 400) %>%
+     pull(Clean_Fuel_Access_Percent)
+
+   # Print the result
+   print(clean_fuel_above_400)
+   mean(clean_fuel_above_400)
+   
+```
+
+As it is easy to see from the graph that the Solomon Islands do not have a high
+clean fuel access by any means, we see in numbers that the mean access percent
+is ~7.47%.
+
+What else can we find about the Solomon Islands ?
+
+```{r}
+
+solomon_islands <- pollution_deaths %>%
+     filter(Country == "Solomon Islands")
+solomon_islands
+
+```
+
+A simple overview shows what we already know about the low clean fuel access. But,
+as the years go on their clean fuel access has actually increases every year,
+showing they are heading in the right direction. With this, their population
+has also increases steadily every year. Let's do another pairs plot to see the
+full spectrum of these variables.
+
+```{r}
+
+Deaths_Per_100k_S <- solomon_islands$Deaths_Per_100000
+Clean_Fuel_Percent_S <- solomon_islands$Clean_Fuel_Access_Percent
+
+model_S = glm(formula = Deaths_Per_100k_S ~ Year * Clean_Fuel_Percent_S * 
+    GDP_Per_Capita * Population, family = "poisson", data = solomon_islands)
+
+ggpairs(model_S, columns = c(1,2,3,4,5), upper = list(continuous = wrap("cor", size = 5))) +
+  theme(strip.text.x = element_text(size = 8),
+        strip.text.y = element_text(size = 5.5))
+
+```
+
+There is almost perfect positive or negative correlation between all of these
+variables. All of which are the correlation direction that they need to be.
+
+Fuel Access Percent and Year have 0.995, which is amazing to see for this country
+as they are clearly striving to be better year in and year out. Another one is
+their GDP is increasing as clean fuel becomes more accessible.
+
+So, while the Solomon Islands may be an outlier in Deaths per 100k, their world
+becomes better and better every single year and hopefully in the future they
+can start to exponentially increase their clean fuel access.
+
+```{r}
+
+solomon_model <- glm(solomon_islands$Clean_Fuel_Access_Percent ~ solomon_islands$Year)
+
+# In the year 2050..
+
+year_2050 = -260.36 + 0.1334*(2050)
+year_2050
+
+# In the year 2075..
+
+year_2075 = -260.36 + 0.1334*(2075)
+year_2075
+
+# In the year 2100..
+
+year_2100 = -260.36 + 0.1334*(2100)
+year_2100
+
+```
+
+This also will apply to plot 2 with the outliers being much higher than the rest.
+
+How about the blip in plot 3 with the data going up and then back down ? What is
+that all about ?
+
+```{r}
+
+hump_data <- pollution_deaths %>%
+    filter(Clean_Fuel_Access_Percent <= 40) %>%
+    filter(Clean_Fuel_Access_Percent >= 20) %>%
+    filter(GDP_Per_Capita >= 16) %>%
+    pull(Country)
+
+hump_data
+
+```
+
+Using the same process as we did to find the Solomon Islands, we find that
+Equatorial Guinea is the country with this weird hump in their GDP data.
+
+The new question at hand is: what is the cause of this GDP bump that Equatorial
+Guinea went through ?
+
+```{r}
+
+guinea <- pollution_deaths %>%
+    filter(Country == "Equatorial Guinea")
+
+Deaths_Per_100k_G <- guinea$Deaths_Per_100000
+Clean_Fuel_Percent_G <- guinea$Clean_Fuel_Access_Percent
+
+model_G = glm(formula = Deaths_Per_100k_G ~ Year * Clean_Fuel_Percent_G * 
+    GDP_Per_Capita * Population, family = "poisson", data = guinea)
+
+ggpairs(model_G, columns = c(1,2,3,4,5), upper = list(continuous = wrap("cor", size = 5))) +
+  theme(strip.text.x = element_text(size = 7.5),
+        strip.text.y = element_text(size = 5))
+
+```
+
+The pairs plot doesn't give anything that would guide us in the right direction.
+Population and Clean Fuel go up as the year increases but GDP sees a noticeable
+decline. My theory would be an outside reason as to why this is happening. Trade
+maybe ?
+
+This finding will also correlate to plot 2 in the bump that is seen in GDP vs Deaths.
+This will be ignored.
+
+We will leave this alone and move on with our analysis and move to a more broad
+question.
+
+How is this data divided up and do we see more variance from different countries.
+
+```{r}
+
+pollution_deaths %>%
+  count(Country)
+
+```
+
+With the 181 countries apart of the data set, only a few have less than 17 instances..
+
+$\bullet$ Afghanistan
+$\bullet$ Djibouti
+$\bullet$ Nauru
+$\bullet$ Sao Tome and Principe
+$\bullet$ Somalia
+
+This could happen due to cleaning of the data where some spots where left blank
+so they were left out of the full data set. So, from the raw data, it seemed like
+every country had 17 instances which tells us no country has a real strangle
+hold of the data and there is no further reason to go deeper.
+
+Next we will look at how population is and the range in which it inhibits.
+
+```{r}
+
+coun_7000 <- pollution_deaths %>%
+  filter(Population > 6000) %>%
+  pull(Country)
+coun_7000
+
+coun_1500 <- pollution_deaths %>%
+  filter(Population > 1000) %>%
+  filter(Population < 4000) %>%
+  pull(Country)
+coun_1500
+
+coun_100 <- pollution_deaths %>%
+  filter(Population <= 100) %>%
+  pull(Population)
+
+hist(coun_100, xlim = c(0,100), breaks = 50, main = "Histogram of Countries <= 100000 people", xlab = "Population (1000)")
+
+```
+
+Before going into the population divide, a couple outliers made it difficult
+so they had to be pulled and identified so we could continue. The "World", at
+population 7000, or 7 billion, was removed along with India and China, which sat
+between 1000 and 1500.
+
+Looking at our new histogram with the data we want, we see that the majority of
+data is still under pop = 10, or 10,000 people.
+
+```{r}
+
+coun_10 <- pollution_deaths %>%
+  filter(Population <= 10) %>%
+  pull(Population)
+
+hist(coun_10, xlim = c(0,10), breaks = 50, main = "Histogram of Countries <= 10000 people", xlab = "Population (1000)")
+
+```
+
+Now at a max of 10,000 people, we see the data is pretty evenly seperated besides
+the very left where within 0.2 still sees the highest frequency.
+
+This could lead us to looking at the range 0 to 3 to maybe 7 to 10 to see how the
+two ranges compare to each other. After we can throw India and China in to see how 
+different they are from the first two groups.
+
+```{r}
+
+# Group 0 to 3 (0 to 3000 people)
+pop_0_3 <- pollution_deaths %>%
+  filter(Population <= 3)
+
+# Group 7 to 10 (7000 to 10000 people)
+pop_7_10 <- pollution_deaths %>%
+  filter(Population >= 7) %>%
+  filter(Population <= 10)
+
+# China and India
+pop_CI <- pollution_deaths %>%
+  filter(Population >= 800) %>%
+  filter(Population <= 1800)
+
+a <- count(pop_0_3)
+b <- count(pop_7_10)
+c <- count(pop_CI)
+abc <- c(a,b,c)
+abc
+
+```
+
+For fun we see the amount of instances each group sees which was expected. But now
+we can compare all 3 groups to see how different each one is from each other.
+
+```{r}
+
+# Population 0 to 3 pairs plot
+Deaths_Per_100k_0 <- pop_0_3$Deaths_Per_100000
+Clean_Fuel_Percent_0 <- pop_0_3$Clean_Fuel_Access_Percent
+
+model_0 = glm(formula = Deaths_Per_100k_0 ~ Year * Clean_Fuel_Percent_0 * 
+    GDP_Per_Capita * Population, family = "poisson", data = pop_0_3)
+
+ggpairs(model_0, columns = c(1,2,3,4,5), upper = list(continuous = wrap("cor", size = 5))) +
+  theme(strip.text.x = element_text(size = 7.5),
+        strip.text.y = element_text(size = 5))
+
+# Population 7 to 10 pairs plot
+Deaths_Per_100k_7 <- pop_7_10$Deaths_Per_100000
+Clean_Fuel_Percent_7 <- pop_7_10$Clean_Fuel_Access_Percent
+
+model_7 = glm(formula = Deaths_Per_100k_7 ~ Year * Clean_Fuel_Percent_7 * 
+    GDP_Per_Capita * Population, family = "poisson", data = pop_7_10)
+
+ggpairs(model_7, columns = c(1,2,3,4,5), upper = list(continuous = wrap("cor", size = 5))) +
+  theme(strip.text.x = element_text(size = 7.5),
+        strip.text.y = element_text(size = 5))
+
+# Population China and India pairs plot
+Deaths_Per_100k_C <- pop_CI$Deaths_Per_100000
+Clean_Fuel_Percent_C <- pop_CI$Clean_Fuel_Access_Percent
+
+model_C = glm(formula = Deaths_Per_100k_C ~ Year * Clean_Fuel_Percent_C * 
+    GDP_Per_Capita * Population, family = "poisson", data = pop_CI)
+
+ggpairs(model_C, columns = c(1,2,3,4,5), upper = list(continuous = wrap("cor", size = 5))) +
+  theme(strip.text.x = element_text(size = 7.5),
+        strip.text.y = element_text(size = 5))
+```
+
+Before anything is looked at, reminder that pairs plot 3 (China and India) only
+have 2 countries and not as much data at models 1 and 2 so results from model 3
+will be different.
+
+It might be a little hard to go back and forth to see what is really going on
+but here are the main differences between the three groups.
+
+As for groups 1 and 2, there is really no difference in correlation coefficients.
+The only thing that can be commented on though is that group 2 hada higher value
+in every instance than group 1, that being toward 1 or -1.
+
+For group 3 compared to groups 1 and 2, population was a huge difference that
+really boosted the correlation values between population and everything else, 
+which once again was to be expected because they both have 1B+ people. Other
+big changes came from..
+
+$\bullet$ Year ~ Deaths per 100k
+$\bullet$ Clean Fuel ~ Year
+$\bullet$ GDP ~ Year
+
+.. which once again could be expected because these two countries are fully
+developed so their population and GDP would be exponentially higher than third
+world and developing countries.
+
+So, where does this leave us with this data ?
+
+No where really. The group of China and India were fully expected to be this way
+so their data can be ignored. As for group 1 and 2, the key thing to take away
+from that comparison is that further developed countries (7000 to 10000) people
+had better correlation coefficients than that of group 1 (0 to 3000) people. This
+shows that with more resources and money that countries will continue to prosper
+and be cleaner.
+
+From this EDA process, the main takeaways that were found are that developed countries
+are obviously going to have the resources to have clean fuel and be healthier for
+its people to live in. Countries like the Solomon Islands still have some work to
+do but from their data they are continuing to go in the right direction, which
+is always a great sign. And while their population numbers and GDP per capita will
+be lower, as long as they continue to develop then the access to clean fuel
+also continues to grow. For a nation like Equatorial Guinea, their data gave us a
+reason to look into their name but all that came about was a foreign affair that
+had nothing to do with our question.
+
+Our last look in at the different groups of countries to see how their data
+sets aligned all told one thing. Each group continues to grow at their own pace
+but each has a positive correlation from year to clean fuel access and that is
+what is important in the context of our problem.
