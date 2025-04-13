@@ -307,7 +307,7 @@ so they were left out of the full data set. So, from the raw data, it seemed lik
 every country had 17 instances which tells us no country has a real strangle
 hold of the data and there is no further reason to go deeper.
 
-Next we will look at how population is and the range in which it inhibits.
+Next we will look at how population is and the range in which it inhabits.
 
 ```{r}
 
