@@ -1,0 +1,327 @@
+```{r}
+
+library(tidyverse)
+library(dobson)
+library(dplyr)
+library(GGally)
+
+```
+
+```{r}
+
+tuesdata <- tidytuesdayR::tt_load('2022-04-12')
+
+fuel_gdp <- tuesdata$fuel_gdp #fuel_gdp
+death_source <- tuesdata$death_source #death_source
+
+```
+
+```{r}
+
+pollution_deaths <- merge(fuel_gdp, death_source, by=c('Entity', 'Year', 'Code'))
+pollution_deaths <- pollution_deaths %>% rename('Clean_Fuel_Access_Percent' = 'Access to clean fuels and technologies for cooking (% of population)',  
+                                                'GDP_Per_Capita' = 'GDP per capita, PPP (constant 2017 international $)' ,
+                                                'Population'= 'Population (historical estimates)', 
+                                                'Deaths_Per_100000' = 'Deaths - Cause: All causes - Risk: Household air pollution from solid fuels - Sex: Both - Age: Age-standardized (Rate)', 
+                                                'Country' = 'Entity')
+pollution_deaths <- subset(pollution_deaths, select = -c(Continent))
+
+#deaths is per 100000
+pollution_deaths <- pollution_deaths[!is.na(pollution_deaths$Code),]
+pollution_deaths <- na.omit(pollution_deaths)
+
+```
+
+```{r}
+
+#scale GDP by thousands
+#scale population by millions
+#truncate decimal portion of deaths per 100000
+pollution_deaths <- pollution_deaths %>% mutate(Population = Population/1000000, GDP_Per_Capita = GDP_Per_Capita/1000, Deaths_Per_100000 = as.integer(Deaths_Per_100000))
+pollution_deaths <- subset(pollution_deaths, select = -Code)
+
+# View(pollution_deaths)
+
+```
+
+```{r}
+
+library(MASS)
+
+null = glm(Deaths_Per_100000 ~ 1, family="poisson", data=pollution_deaths)
+null
+
+full = glm(Deaths_Per_100000 ~ Year * Clean_Fuel_Access_Percent * 
+             GDP_Per_Capita * Population, data=pollution_deaths, 
+           family="poisson")
+full
+
+partial = glm(Deaths_Per_100000 ~ Year + Clean_Fuel_Access_Percent + 
+                GDP_Per_Capita + Population + Year:Clean_Fuel_Access_Percent + 
+                Year:GDP_Per_Capita + Year:Population + Clean_Fuel_Access_Percent:GDP_Per_Capita +
+                Clean_Fuel_Access_Percent:Population + GDP_Per_Capita:Population, data=pollution_deaths, 
+              family="poisson")
+partial
+
+```
+```{r}
+
+pollution_deaths <- pollution_deaths %>% 
+  mutate(Deaths = as.integer(Deaths_Per_100000>0))
+View(pollution_deaths)
+
+#fit bernoulli model 
+#null
+bern_null = glm(Deaths ~ 1, family="binomial", data=pollution_deaths)
+#full
+bern_full = glm(Deaths ~ Year * Clean_Fuel_Access_Percent * 
+                  GDP_Per_Capita * Population, data=pollution_deaths, 
+                family="binomial")
+
+
+summary(bern_null)
+summary(bern_full)
+
+```
+
+```{r}
+
+n = length(pollution_deaths$Deaths)
+stepAIC(bern_null, scope=list(upper=bern_full), direction="both", k=log(n))
+
+#Best model so far - stepwise BIC on a Bernoulli model of deaths
+model_final = glm(formula = Deaths ~ Clean_Fuel_Access_Percent + GDP_Per_Capita + 
+                    Year + Clean_Fuel_Access_Percent:Year, family = "binomial", 
+                  data = pollution_deaths)
+summary(model_final)
+
+```
+
+```{r}
+
+#fitting model from stepAIC
+bern_model = glm(formula = Deaths ~ Clean_Fuel_Access_Percent + GDP_Per_Capita + 
+                   Year + Clean_Fuel_Access_Percent:Year + Clean_Fuel_Access_Percent:GDP_Per_Capita, 
+                 family = "binomial", data = pollution_deaths)
+#dispersion check - looks fine
+bern_quasi = glm(formula = Deaths ~ Clean_Fuel_Access_Percent + GDP_Per_Capita + 
+                   Year + Clean_Fuel_Access_Percent:Year + Clean_Fuel_Access_Percent:GDP_Per_Capita, 
+                 family = "quasibinomial", data = pollution_deaths)
+summary(bern_model)
+summary(bern_quasi)
+
+```
+
+
+Start of EDA Process
+----------------------
+
+From stepAIC, the model below is what was found to be the best fit model for
+our data.
+
+```{r}
+
+model_final = glm(formula = Deaths ~ Clean_Fuel_Access_Percent + GDP_Per_Capita + 
+                    Year + Clean_Fuel_Access_Percent:Year, family = "binomial", 
+                  data = pollution_deaths)
+model_final
+
+```
+
+First, we can ask how do these variables play on each other. Is there any
+correlation amongst these variables and how linear are they to one another.
+
+```{r}
+
+# Pairs plot to show correlation between the 5 variables
+ggpairs(model_final, columns = c(1,2,3,4), upper = list(continuous = wrap("cor", size = 5))) +
+  theme(strip.text.x = element_text(size = 8),
+        strip.text.y = element_text(size = 5.5))
+
+```
+
+Looking at each pair of variables, almost every pair has no correlation
+whatsoever. Three pairs do stick out though that we can look into further.
+
+$\bullet$ Clean_Fuel_Percent and Deaths_Per_100k (-0.553)
+$\bullet$ GDP_Per_Capita and Deaths_Per_100k (-0.739)
+$\bullet$ GDP_Per_Capita and Clean_Fuel_Percent (0.657)
+
+Only 3 of the variables have some sort of correlation between them while the
+other two (Year and Population) have almost zero correlation to any other
+variable, which could be expected.
+
+```{r}
+
+# Each of the variables plotted against each other to see closer how they relate
+# Correlation value is in the parenthesis
+par(mfrow = c(1, 3))
+plot(pollution_deaths$Clean_Fuel_Access_Percent, pollution_deaths$Deaths, xlab = "Clean Fuel Access %", ylab = "Deaths", main = "Clean Fuel vs. Deaths ~ (-0.553)")
+plot(pollution_deaths$GDP_Per_Capita, pollution_deaths$Deaths, xlab = "GDP per Capita", ylab = "Deaths", main = "GDP vs. Deaths ~ (-0.739)")
+plot(pollution_deaths$Clean_Fuel_Access_Percent, pollution_deaths$GDP_Per_Capita, xlab = " Clean Fuel Access %", ylab = "GDP per Capita", main = "Clean Fuel vs. GDP ~ (0.657)")
+
+```
+
+From the pairs of variables with correlation, two have negative and one has positive.
+With deaths being a binomial variable, the plots 1 and 2 are a little hard to read.
+
+From plot 1,
+looking away from Deaths = 1 and paying more attention to Deaths = 0, we see
+that they become visible at 60%+ and become more abundant as clean fuel access
+increases. Deaths will happen regardless and with the bold line at Deaths = 1 not
+much can be taken from it.
+
+From plot 2,.
+where we relate GDP and Deaths, the correlation factor is a little better. It
+being -0.739, it means that as deaths increase, GDP in said country will decrease,
+which is logical. Unlike plot 1, we can look at Deaths = 1 to analyze instead of 0.
+Deaths = 1 seem to vanish as GDP per Capita hits around 50, helping our logic
+make sense.
+
+For plot 3,
+both variables are normal and therefore we have a normal plot. With this one being
+the only positive correlation out of the three, it should make sense that
+as clean fuel becomes more available, the GDP of the country should increase.
+As for  Clean Fuel >= 90, GDP of countries skyrocket, maybe proving all countries
+should strive towards those numbers.
+
+Moving away from the pairs plots and more at the residuals of the data. Is there
+anything here that raise any questions?
+
+```{r}
+
+#get residuals
+model_resid <- resid(model_final, type="deviance")
+
+#residuals vs. fitted looks fine
+plot(model_final$fitted.values, model_resid, xlab = "Fitted Values", ylab = "Residuals")
+
+
+#issues - more high fuel access percent in data, fanning in residuals there
+hist(pollution_deaths$Clean_Fuel_Access_Percent, xlab = "Clean Fuel %")
+plot(pollution_deaths$Clean_Fuel_Access_Percent, model_resid, xlab = "Clean Fuel %",
+     ylab = "Residuals")
+
+#issues - more high gdp per capita in data, fanning in residuals there
+hist(pollution_deaths$GDP_Per_Capita, xlab= "GDP per Capita")
+plot(pollution_deaths$GDP_Per_Capita, model_resid, xlab= "GDP per Capita", ylab = "Residuals")
+
+```
+
+From simply looking at the residual models against Clean Fuel and GDP, the
+relationship is good when Clean Fuel is closer and 0 and GDP closer to 100+.
+
+There is a little flutter at the end of Clean Fuel and the data trends up. What
+could be the reason for that? From the histogram, most countries reside in that
+area and they all have the same trend.
+
+The same can be said about the GDP plots where most countries reside at GDP <50.
+
+With the focus being on Clean Fuel and GDP, we can pull plot 3 from the pairs plots
+to try and help us.
+
+```{r}
+
+plot(pollution_deaths$Clean_Fuel_Access_Percent, pollution_deaths$GDP_Per_Capita, xlab = " Clean Fuel Access %", ylab = "GDP per Capita", main = "Clean Fuel vs. GDP ~ (0.657)")
+
+```
+
+What is interesting is the reverse is happening in the residual plots vs. Clean Fuel
+and GDP. But with the plot above, there is a positive correlation. 
+
+The outliers seen in each of these plots are certain countries that have their
+data skewed in some way, which is why there are trends within the major trend.
+The hump in the plot above relates to one country, Equatorial Guinea. So, in the
+clusters outside of the main picture are not multiple countries but just one. Guinea
+will be looked into later.
+
+```{r}
+
+final_fit <- model_final$fitted.values
+model_resid <- resid(model_final, type="deviance")
+final_df <- data.frame(final_fit, model_resid)
+
+ggplot(data = final_df, aes(final_fit, model_resid)) +
+  geom_jitter(height = 1/10, width = 0.01, size = 3, alpha = 1/4) +
+  geom_smooth() +
+  geom_hline(yintercept = 0, col = 2) +
+  labs(title = "Deviance residuals")
+
+```
+
+With our new plot, we see the relationship between the two lines. What is good
+is the abundance of points are towards the zero line. But, both taper off when at
+the extremes.
+
+```{r}
+
+count <- 1:3044
+df_resid <- data.frame(count, model_resid)
+
+resid_pos <- df_resid %>%
+  filter(model_resid > 0)
+nrow(resid_pos)
+
+resid_neg <- df_resid %>%
+  filter(model_resid < 0)
+nrow(resid_neg)
+
+poll_pos <- pollution_deaths %>%
+  filter(Deaths > 0)
+nrow(poll_pos)
+
+```
+
+Deaths = 1 is the top line while Deaths = 0 is the bottom.
+
+```{r}
+
+binned_fitted <- cut(model_final$fitted.values, breaks = 20)
+plot(binned_fitted)
+table(binned_fitted)
+
+```
+
+From the abundance each line sees on the "head", Deaths = 1 sees 1710 occurrences
+while Deaths = 0 head is only 171, a tenth of the size. An helpful indicator of this
+is in the bias of the blue line being dragged once it gets all the way to the right.
+
+Since we know that the residuals are bunched up in terms of Deaths = 1 and Deaths = 0,
+we can use that to look back on the Clean Fuel vs Residual and GDP vs Residual
+to see that when Death = 0, the residuals for Clean Fuel are far from 0 and not good,
+while trending to 0 as Clean Fuel also increases. For GDP, a little more detail
+work is needed before making an assumption.
+
+```{r}
+
+gdp_pos_75 <- df_resid %>%
+  filter(model_resid > 0) %>%
+  filter(model_resid <= 0.75)
+
+gdp_pos_50 <- df_resid %>%
+  filter(model_resid > 0) %>%
+  filter(model_resid <= 0.5)
+
+num_pos_75 <- nrow(gdp_pos_75)
+num_pos_50 <- nrow(gdp_pos_50)
+den_pos_75 <- nrow(poll_pos)
+den_pos_50 <- nrow(poll_pos)
+num_pos_75/den_pos_75*100
+num_pos_50/den_pos_50*100
+
+```
+
+88.52% of the data for Deaths = 1 appear when residuals are 0 < residual < 0.75 and
+81.02$ show when residuals are 0 < residual < 0.50. Meaning, the vast majority are
+towards the residual line while from afar is might seem like the data is more skewed
+than it is.
+
+With Deaths = 1, is might make sense to see that when GDP is closer to 0, more
+deaths are present, showing a better residual and closer to 0 as well. As GDP
+increases, that fluttering of the data appears and that residual value rises.
+
+With Deaths = 0, the same assumption can be made. Residuals are bad when Deaths = 0
+when GDP is low but as GDP increases, the residuals come very close to 0 because
+more money relates to a better clean fuel access (as seen in the pos. corr plot),
+resulting in lower death numbers.
+
