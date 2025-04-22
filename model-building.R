@@ -1,40 +1,8 @@
 library(tidyverse)
 library(GGally)
 
-tuesdata <- tidytuesdayR::tt_load('2022-04-12')
-
-fuel_gdp <- tuesdata$fuel_gdp
-death_source <- tuesdata$death_source
-#fuel_gdp
-#death_source
-
-#View(fuel_gdp)
-
-#get data together
-pollution_deaths <- merge(fuel_gdp, death_source, by=c('Entity', 'Year', 'Code'))
-pollution_deaths <- pollution_deaths %>% rename('Clean_Fuel_Access_Percent' = 'Access to clean fuels and technologies for cooking (% of population)',  
-                                                'GDP_Per_Capita' = 'GDP per capita, PPP (constant 2017 international $)' ,
-                                                'Population'= 'Population (historical estimates)', 
-                                                'Deaths_Per_100000' = 'Deaths - Cause: All causes - Risk: Household air pollution from solid fuels - Sex: Both - Age: Age-standardized (Rate)', 
-                                                'Country' = 'Entity')
-pollution_deaths <- subset(pollution_deaths, select = -c(Continent))
-
-
-
-
-#deaths is per 100000
-#pollution_deaths <- pollution_deaths[!is.na(pollution_deaths$Code),]
-pollution_deaths <- na.omit(pollution_deaths)
-
-
-#scale GDP by thousands
-#scale population by millions
-#truncate decimal portion of deaths per 100000
-pollution_deaths <- pollution_deaths %>% mutate(Population = Population/1000000, GDP_Per_Capita = GDP_Per_Capita/1000, Deaths_Per_100000 = as.integer(Deaths_Per_100000))
-pollution_deaths <- subset(pollution_deaths, select = -Code)
-
-View(pollution_deaths)
-
+#read in cleaned data
+pollution_deaths <- read.csv("pollution_deaths.csv")
 
 #exploring poisson models - did not use
 library(MASS)
@@ -74,8 +42,10 @@ summary(model)
 
 #motivating factor - there are a lot of 0s in the data
 hist(pollution_deaths$Deaths_Per_100000)
-
-
+count(pollution_deaths, Deaths_Per_100000)
+length(pollution_deaths$Deaths_Per_100000)
+#181 unique countries
+length(unique(pollution_deaths$Country))
 
 
 
@@ -96,9 +66,9 @@ summary(bern_null)
 summary(bern_full)
 
 
-#stepAIC(null, scope = list(upper = partial), 
-#        direction = "forward", k = 2)
-#stepAIC(partial, direction = "backward", k = 2)
+stepAIC(bern_null, scope = list(upper = bern_full), 
+        direction = "forward", k = 2)
+stepAIC(bern_full, direction = "backward", k = 2)
 stepAIC(bern_null, scope = list(upper = bern_full), 
         direction="both", k=2)
 
@@ -120,6 +90,8 @@ summary(bern_quasi)
 
 #looking at BIC measure
 n = length(pollution_deaths$Deaths)
+stepAIC(bern_null, scope=list(upper=bern_full), direction="forward", k=log(n))
+stepAIC(bern_full, direction="backward", k=log(n))
 stepAIC(bern_null, scope=list(upper=bern_full), direction="both", k=log(n))
 
 
@@ -151,6 +123,8 @@ hist(pollution_deaths$GDP_Per_Capita)
 plot(pollution_deaths$GDP_Per_Capita, model_resid)
 
 #residuals vs. year looks fine
-plot(pollution_deaths$Year, bern_2_resid)
+plot(pollution_deaths$Year, model_resid)
 
+
+model_final$coefficients
 
