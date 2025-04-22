@@ -1,0 +1,9 @@
+These are the files for the STAT 3302 Project. 
+
+Guide:
+0. data-cleaning.R is the cleaning script, outputs pollution_deaths.csv
+1. model-building.R is the model building script
+2. EDA-Process.Rmd is the original EDA, EDA-2.Rmd is the final EDA
+3. Residuals code.R is the results script
+4. plots is the folder containing all plots generated that will be used in the final report
+
