@@ -1,40 +1,9 @@
 library(tidyverse)
 library(GGally)
 
-tuesdata <- tidytuesdayR::tt_load('2022-04-12')
-
-fuel_gdp <- tuesdata$fuel_gdp
-death_source <- tuesdata$death_source
-#fuel_gdp
-#death_source
-
-#View(fuel_gdp)
-
-#get data together
-pollution_deaths <- merge(fuel_gdp, death_source, by=c('Entity', 'Year', 'Code'))
-pollution_deaths <- pollution_deaths %>% rename('Clean_Fuel_Access_Percent' = 'Access to clean fuels and technologies for cooking (% of population)',  
-                                                'GDP_Per_Capita' = 'GDP per capita, PPP (constant 2017 international $)' ,
-                                                'Population'= 'Population (historical estimates)', 
-                                                'Deaths_Per_100000' = 'Deaths - Cause: All causes - Risk: Household air pollution from solid fuels - Sex: Both - Age: Age-standardized (Rate)', 
-                                                'Country' = 'Entity')
-pollution_deaths <- subset(pollution_deaths, select = -c(Continent))
-
-
-
-
-#deaths is per 100000
-#pollution_deaths <- pollution_deaths[!is.na(pollution_deaths$Code),]
-pollution_deaths <- na.omit(pollution_deaths)
-
-
-#scale GDP by thousands
-#scale population by millions
-#truncate decimal portion of deaths per 100000
-pollution_deaths <- pollution_deaths %>% mutate(Population = Population/1000000, GDP_Per_Capita = GDP_Per_Capita/1000, Deaths_Per_100000 = as.integer(Deaths_Per_100000))
-pollution_deaths <- subset(pollution_deaths, select = -Code)
-
+#read in cleaned data
+pollution_deaths <- read.csv("pollution_deaths.csv")
 View(pollution_deaths)
-
 
 
 #Solution: make it a bernoullli variable
@@ -47,7 +16,6 @@ model_final = glm(formula = Deaths ~ Clean_Fuel_Access_Percent + GDP_Per_Capita 
                     Year + Clean_Fuel_Access_Percent:Year, family = "binomial", 
                   data = pollution_deaths)
 summary(model_final)
-
 
 
 

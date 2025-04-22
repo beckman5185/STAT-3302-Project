@@ -109,8 +109,10 @@ anova(bern_AIC, test="Chisq")
 anova(bern_BIC, test="Chisq")
 
 
-#final model
-model_final = bern_BIC
+#Best model so far - stepwise BIC on a Bernoulli model of deaths
+model_final = glm(formula = Deaths ~ Clean_Fuel_Access_Percent + GDP_Per_Capita + 
+                   Year + Clean_Fuel_Access_Percent:Year, family = "binomial", 
+                 data = pollution_deaths)
 
 
 
