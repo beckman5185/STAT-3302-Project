@@ -64,6 +64,7 @@ partial = glm(Deaths_Per_100000 ~ Year + Clean_Fuel_Access_Percent +
 partial
 
 ```
+
 ```{r}
 
 pollution_deaths <- pollution_deaths %>% 
@@ -137,6 +138,7 @@ correlation amongst these variables and how linear are they to one another.
 ggpairs(model_final, columns = c(1,2,3,4), upper = list(continuous = wrap("cor", size = 5))) +
   theme(strip.text.x = element_text(size = 8),
         strip.text.y = element_text(size = 5.5))
+ggsave("plots/eda-1.pdf")
 
 ```
 
@@ -155,10 +157,12 @@ variable, which could be expected.
 
 # Each of the variables plotted against each other to see closer how they relate
 # Correlation value is in the parenthesis
+pdf("plots/eda-2.pdf")
 par(mfrow = c(1, 3))
 plot(pollution_deaths$Clean_Fuel_Access_Percent, pollution_deaths$Deaths, xlab = "Clean Fuel Access %", ylab = "Deaths", main = "Clean Fuel vs. Deaths ~ (-0.553)")
 plot(pollution_deaths$GDP_Per_Capita, pollution_deaths$Deaths, xlab = "GDP per Capita", ylab = "Deaths", main = "GDP vs. Deaths ~ (-0.739)")
 plot(pollution_deaths$Clean_Fuel_Access_Percent, pollution_deaths$GDP_Per_Capita, xlab = " Clean Fuel Access %", ylab = "GDP per Capita", main = "Clean Fuel vs. GDP ~ (0.657)")
+dev.off()
 
 ```
 
@@ -194,17 +198,26 @@ anything here that raise any questions?
 model_resid <- resid(model_final, type="deviance")
 
 #residuals vs. fitted looks fine
+pdf("plots/eda-3.pdf")
 plot(model_final$fitted.values, model_resid, xlab = "Fitted Values", ylab = "Residuals")
-
+dev.off()
 
 #issues - more high fuel access percent in data, fanning in residuals there
-hist(pollution_deaths$Clean_Fuel_Access_Percent, xlab = "Clean Fuel %")
+pdf("plots/eda-4.pdf")
+hist(pollution_deaths$Clean_Fuel_Access_Percent, xlab = "Clean Fuel %", main="Histogram of Clean Fuel Access %")
+dev.off()
+pdf("plots/eda-5.pdf")
 plot(pollution_deaths$Clean_Fuel_Access_Percent, model_resid, xlab = "Clean Fuel %",
      ylab = "Residuals")
+dev.off()
 
 #issues - more high gdp per capita in data, fanning in residuals there
-hist(pollution_deaths$GDP_Per_Capita, xlab= "GDP per Capita")
+pdf("plots/eda-6.pdf")
+hist(pollution_deaths$GDP_Per_Capita, xlab= "GDP per Capita", main="Histogram of GDP Per Capita")
+dev.off()
+pdf("plots/eda-7.pdf")
 plot(pollution_deaths$GDP_Per_Capita, model_resid, xlab= "GDP per Capita", ylab = "Residuals")
+dev.off()
 
 ```
 
@@ -221,8 +234,9 @@ With the focus being on Clean Fuel and GDP, we can pull plot 3 from the pairs pl
 to try and help us.
 
 ```{r}
-
+pdf("plots/eda-8.pdf")
 plot(pollution_deaths$Clean_Fuel_Access_Percent, pollution_deaths$GDP_Per_Capita, xlab = " Clean Fuel Access %", ylab = "GDP per Capita", main = "Clean Fuel vs. GDP ~ (0.657)")
+dev.off()
 
 ```
 
@@ -246,6 +260,7 @@ ggplot(data = final_df, aes(final_fit, model_resid)) +
   geom_smooth() +
   geom_hline(yintercept = 0, col = 2) +
   labs(title = "Deviance residuals")
+ggsave("plots/eda-9.pdf")
 
 ```
 
@@ -275,9 +290,10 @@ nrow(poll_pos)
 Deaths = 1 is the top line while Deaths = 0 is the bottom.
 
 ```{r}
-
+pdf("plots/eda-10.pdf")
 binned_fitted <- cut(model_final$fitted.values, breaks = 20)
 plot(binned_fitted)
+dev.off()
 table(binned_fitted)
 
 ```

@@ -73,7 +73,6 @@ plot(fitted_vals, resid_deviance,
      xlab = "Fitted Values", ylab = "Deviance Residuals")
 abline(h = 0, col = "red", lty = 2)
 
-
 # Histogram of deviance residuals
 hist(resid_deviance, breaks = 30, 
      main = "Histogram of Deviance Residuals",
