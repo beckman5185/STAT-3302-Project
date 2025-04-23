@@ -230,7 +230,7 @@ Higher GDP per capita is significantly associated with reduced mortality from in
 
 The negative interaction between Clean Fuel Access and Year indicates that increases in Clean Fuel Access over time may actually contribute to eventual lowering of deaths. This appears to be more in line with our assumptions about the impacts of Clean Fuel Access. 
 
-The findings underscore the critical importance of economic growth as a means to combat the global health crisis of indoor air pollution. While we would expect clean fuel access to be a more direct and actionable lever for reducing mortality in low- and middle-income countries, our model seems to  see this as less impactful than economic growth. 
+The findings underscore the critical importance of economic growth as a means to combat the global health crisis of indoor air pollution. While we would expect clean fuel access to be a more direct and actionable lever for reducing mortality in low- and middle-income countries, our model seems to  see this as less impactful than economic growth (at the given scale). 
 
 Investments in infrastructure that deliver clean cooking and heating fuels to larger proportions of the population (particularly in developing regions) could lead to substantial gains in public health. Furthermore, policies that encourage economic growth may also be beneficial on this front.
 
