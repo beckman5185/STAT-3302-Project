@@ -164,7 +164,7 @@ dev.off()
 pdf("plots/eda-4.pdf")
 hist(pollution_deaths$Clean_Fuel_Access_Percent, xlab = "Clean Fuel %", main="Histogram of Clean Fuel Access %")
 dev.off()
-pdf("plots/eda-5.pdf")
+png("plots/eda-5.png")
 plot(pollution_deaths$Clean_Fuel_Access_Percent, model_resid, xlab = "Clean Fuel %",
      ylab = "Residuals")
 dev.off()
@@ -173,7 +173,7 @@ dev.off()
 pdf("plots/eda-6.pdf")
 hist(pollution_deaths$GDP_Per_Capita, xlab= "GDP per Capita", main="Histogram of GDP Per Capita")
 dev.off()
-pdf("plots/eda-7.pdf")
+png("plots/eda-7.png")
 plot(pollution_deaths$GDP_Per_Capita, model_resid, xlab= "GDP per Capita", ylab = "Residuals")
 dev.off()
 
@@ -192,7 +192,7 @@ With the focus being on Clean Fuel and GDP, we can pull plot 3 from the pairs pl
 to try and help us.
 
 ```{r}
-pdf("plots/eda-8.pdf")
+png("plots/eda-8.png")
 plot(pollution_deaths$Clean_Fuel_Access_Percent, pollution_deaths$GDP_Per_Capita, xlab = " Clean Fuel Access %", ylab = "GDP per Capita", main = "Clean Fuel vs. GDP ~ (0.657)")
 dev.off()
 
@@ -218,7 +218,7 @@ ggplot(data = final_df, aes(final_fit, model_resid)) +
   geom_smooth() +
   geom_hline(yintercept = 0, col = 2) +
   labs(title = "Deviance residuals")
-ggsave("plots/eda-9.pdf")
+ggsave("plots/eda-9.png")
 
 ```
 

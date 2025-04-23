@@ -15,12 +15,12 @@ full_poiss = glm(Deaths_Per_100000 ~ Year * Clean_Fuel_Access_Percent *
 
 
 #forward selection by AIC
-stepAIC(null, scope = list(upper = full), 
+stepAIC(null_poiss, scope = list(upper = full_poiss), 
         direction = "forward", k = 2)
 #backward selection by AIC
-stepAIC(full, direction = "backward", k = 2)
+stepAIC(full_poiss, direction = "backward", k = 2)
 #stepwise seleciton by AIC
-stepAIC(null, scope = list(upper = full), 
+stepAIC(null_poiss, scope = list(upper = full_poiss), 
         direction="both", k=2)
 
 #results: selecting full model or nearly full model
@@ -30,7 +30,7 @@ stepAIC(null, scope = list(upper = full),
 original_poiss = glm(formula = Deaths_Per_100000 ~ Clean_Fuel_Access_Percent + 
               GDP_Per_Capita + Year + Population, family = "quasipoisson", 
             data = pollution_deaths)
-summary(model)
+summary(original_poiss)
 
 #results: summary shows dispersion parameter of 10, highly overdispersed
 

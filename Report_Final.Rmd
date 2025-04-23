@@ -1,0 +1,338 @@
+---
+title: "Data Analysis Report - A Breath of Fresh Air? Effects of Indoor Air Pollution on Environmental Related Mortality"
+author: "Audrey Beckman, Sharva Deodhar, Kathleen Guo,  \nAnna McDonald, Charlie McGuire"
+date: "`r Sys.Date()`"
+output: pdf_document
+documentclass: article
+geometry: margin=1in
+fontsize: 12pt
+indent: true
+---
+
+
+```{r, echo=FALSE, message=FALSE}
+#load all libraries
+library(xtable)
+library(tidyverse)
+library(knitr)
+
+#set comments to false
+options(xtable.comment = FALSE)
+
+#read in pollution deaths data (cleaned)
+pollution_deaths <- read.csv("pollution_deaths.csv")
+#flatten deaths to binary
+pollution_deaths <- pollution_deaths %>% mutate(Deaths = as.integer(Deaths_Per_100000>0))
+```
+
+
+
+# Abstract
+
+Indoor air pollution remains a critical global health challenge, responsible for millions of deaths annually. This project explores three central research questions: *What factors drive indoor air pollution deaths? Which regions or groups are most affected? And what measures are effective at reducing these deaths? *To address these questions, we analyzed environmental and socioeconomic data across countries using the "Our World in Data" source, compiled in the Tidy Tuesday dataset (April 2022). The dataset includes over 3,000 observations on indoor air pollution-related deaths, GDP per capita, population, and access to clean fuels. 
+
+Initial analysis revealed a high frequency of zero-death values, which led us to move away from a Poisson rate regression model due to overdispersion. Instead, we recoded the outcome as a binary variable, indicating whether a country experienced one or more indoor air pollution-related deaths per 100,000 people. A logistic regression (Bernoulli) model was used to assess the influence of GDP per capita, clean fuel access, and year on mortality outcomes. 
+
+Model selection was guided by both AIC and BIC. While AIC supported a more complex model with an interaction between GDP per capita and clean fuel access, BIC favored a simpler, more interpretable model. We ultimately selected the BIC-preferred model for its parsimony and comparable performance. 
+
+The final model identified clean fuel access, GDP per capita, year, and an interaction between clean fuel access and year as statistically significant predictors. Higher GDP and greater access to clean fuels were both associated with a lower likelihood of pollution-related mortality. However, the interaction term suggests that the benefits of improved clean fuel access have diminished over time, especially in regions that already have high levels of access. 
+
+These findings show that clean fuel programs are still very important, especially in low- and middle-income countries, where better infrastructure can help lower the number of deaths from indoor air pollution. 
+
+
+
+# Introduction
+
+Around the world, there is a constant concern surrounding the effects of air pollution on human health. While pollution ranges from light to air, the most thought of pollution is often a general definition where pollutants include vehicle emissions and burned waste from factories that is released into the air. Moreover, the Environmental Protection Agency (EPA) categories pollutants into 6 categories: particulate matter, ground-level ozone, carbon monoxide, sulfur dioxide, nitrogen dioxide, and lead (US EPA 2015). As previously mentioned, vehicle emissions contribute mostly to ground level ozone (Department of Environmental Conservation, n.d.). With the vast categories of pollutants come major effects on human health from cancer to cardiovascular and respiratory diseases where air pollution contributes to around 6.5 million deaths per year (National Institute of Environmental Health Sciences 2024).  
+
+Furthermore, a subset of air pollution to be focused on in this research report is that of household air pollution, which is the focus of this report. The World Health Organization (WHO) defines the generation of household air pollution via the “the use of inefficient and polluting fuels and technologies in and around the home that contains a range of health-damaging pollutants, including small particles that penetrate deep into the lungs and enter the bloodstream” (World Health Organization 2024).  Some examples of sources of exposure to in home pollutants include cooking stoves (carbon dioxide) and heating sources, tobacco/cigars, home renovation materials (paints, sealants, asbestos), dust, cleaning materials, and mold (World Economic Forum 2024). With this exposure, around 3.2 million people pass from indoor air pollutants, from diseases like heart disease and respiratory infections to lung cancer (World Health Organization 2024).  
+
+In comparison to developed countries such as the United States and Canada, the risk of harm to health is increased for developing countries. In communities with lower income, using sources of heat such as wood, coal, and dung is more common without access to cleaner sources of heat with proper ventilation (Bruce, R Perez-Padilla, and R Albalak 2024).  The worldwide Health Organization notes that “2.1 billion people still cook using solid fuels” as previously listed and “most of these people are poor and live in low- and middle-income countries” with higher rates in rural areas of the world (World Health Organization 2024).  
+
+Thus, there is adequate evidence indicating a possible link, so taking into country wealth and access to clean fuels, using the dataset of choice, this analysis aims to further explore and confirm the intersection of wealth of nation and access to clean fuels and its impact on mortality related to indoor air pollution. There is a specific aim to address the impact of GDP per capita and access to clean fuel rate and their impact on death for each country available in the dataset.  
+
+# Data and Cleaning
+The data we used was the Indoor Air Pollution Data that was taken from Our World in Data. This consisted of repeated measurements of the covariates and response variable for different countries and regions over different years. There were 3044 total observations representing 181 different countries. Key variables we use from this dataset are Country, Year, Clean_Fuel_Access_Percent, GDP_Per_Capita, Population, and Deaths. Country identified the subject of the observation, Deaths was the response variable, and the other variables were covariates.  
+
+To clean the data, we joined fuel_gdp.csv and death_source.csv together to get relevant information into one table and then filtered to examine only countries, excluding aggregated data for continents. To examine only complete data, we then removed all observations with null values. To get raw data on a more manageable scale,  we scaled Population by millions and scaled GDP per Capita by thousands. We truncated the decimal portion of Deaths Per 100000 (making the continuous variable discrete) and later flattened Deaths Per 100000 to a binary variable Deaths (which is motivated later in the report).
+
+# Model-Building Methods
+As our original response variable, Deaths Per 100000, was count data, our original intention was to use a Poisson model. However, there were a large number of zeros in the data, which posed a significant problem. When we fit a quasi-Poisson model to check the dispersion of our original model, we found it was strongly overdispersed, with an overdispersion parameter of approximately 12 (see appendix). The assumption that the variance and mean were roughly equal was not satisfied, making a Poisson model inappropriate for this data. 
+
+In light of these issues, we decided to flatten Deaths Per 100000 into the binary variable Deaths, which had a value of 1 if a country had 1 or more estimated indoor air pollution deaths per 100,000 people and 0 otherwise. This binary response variable allowed us to fit a Bernoulli model for the data, which was more appropriate given the proportion of zeros in the data.  
+
+```{r, echo=FALSE, message=FALSE, results='asis'}
+#fitting model from stepwise selection on AIC
+bern_AIC = glm(formula = Deaths ~ Clean_Fuel_Access_Percent + GDP_Per_Capita + 
+                   Year + Clean_Fuel_Access_Percent:Year + Clean_Fuel_Access_Percent:GDP_Per_Capita, 
+                 family = "binomial", data = pollution_deaths)
+
+#fitting model from stepwise selection on BIC
+bern_BIC = glm(formula = Deaths ~ Clean_Fuel_Access_Percent + GDP_Per_Capita + 
+                 Year + Clean_Fuel_Access_Percent:Year, family = "binomial", 
+               data = pollution_deaths)
+
+#print tables for AIC and BIC models
+print(xtable(bern_AIC, caption="AIC Model", table.placement="!h"))
+print(xtable(bern_BIC, caption="BIC Model", table.placement="!h"))
+```
+
+
+To find candidate models to compare, we used the stepAIC() function in R to perform forward and stepwise selection by AIC and BIC, as the models come from the same likelihood function. While both criterion measure goodness of fit, BIC has a greater penalty for inclusion of additional terms, so we chose to perform selection with both. Within each measure, forward and stepwise selection (from the null model to the saturated model) both selected the same model. The resulting models selected by AIC and BIC differed only in the inclusion of one interaction term, Clean_Fuel_Access_Percent:GDP_Per_Capita.
+
+As the resulting models were nested, we compared them using deviance and found that the model selected by AIC had a slightly lower deviance, making it a better fit to the data. However, the chi-squared test showed that this change in deviance was not significant. To ensure parsimony, we decided that 0.01 was an appropriate significance level for including a term in the model. Each line of the chi-squared test compared the effects of sequentially adding one new term to the model, assuming that the change in deviance followed a chi-squared distribution with one degree of freedom.
+
+```{r, echo=FALSE, message=FALSE, results='asis'}
+#get table with deviances in it
+dev_table <- matrix(c(bern_AIC$deviance, bern_BIC$deviance), ncol=2)
+colnames(dev_table) <- c('AIC Model', 'BIC Model')
+rownames(dev_table) <- c('Deviance')
+
+#print table for deviances
+print(xtable(dev_table, caption="Comparison of Deviance", table.placement="!h"))
+```
+
+
+```{r, echo=FALSE, message=FALSE, results='asis'}
+#get chi-squared test results
+suppressWarnings(chi_sq <- anova(bern_AIC))
+
+#print table for chi-squared test
+print(xtable(chi_sq, caption="Chi-Squared Test for Analysis of Deviance", table.placement="!h"))
+```
+
+
+The first four terms in the model had p values significantly less than 0.01, meaning they resulted in significant changes of deviance and were appropriate to include. In contrast, the significance of the change in deviance for inclusion of the interaction term was 0.09, which was greater than our desired significance level. From the results of this chi-squared test for deviance, we preferred the more parsimonious model with only four terms to the model that included the interaction term. We therefore chose the model selected by stepwise selection by BIC as our final model.  
+
+It should be noted, however, that this model violates the independence assumption of the Bernoulli regression model. Our observations are repeated measurements on the same countries over time. As such, there is a clear source of temporal dependence between observations. In the interest of analysis of change over time, we decided to move forward with the Bernoulli model and interpret results with caution. We leave other solutions to the independence assumption (such as a Binomial model with country as the group) to future work.
+
+# Model Definition
+We define the outcome by whether or not a country has an estimated rate of more than 1 indoor air pollution related death per 100,000 people, which we will call from here forward "non-zero death rate." We denote the observed values as $y_i$ with $i = 1, \ldots, 3044$. Let $y_i = 1$ indicate that a country has a non-zero death rate and $0$ indicate otherwise. We assume that each $y_i$ is a realization of a random variables $Y_i \sim \mbox{Bernoulli}(p_i)$ independently, and model the probability that a country has a non-zero death rate using the following logistic regression:
+
+
+$$
+\begin{aligned}
+  \mbox{logit}(p_i) = & \beta_0 + \\ 
+                    & \beta_1 \times (Clean\_Fuel\_Access\_\%)_i  +\\
+                   & \beta_2 \times (GDP\_Per\_Capita)_i +\\
+                   & \beta_3 \times (Year)_i +\\
+                   & \beta_4  \times (Clean\_Fuel\_Access\_\%)_i \times (Year)_i
+\end{aligned}
+$$ 
+
+We define the link function $logit(p_i) = log(\frac{p_i}{1-p_i})$.  
+$(Clean\_Fuel\_Access\_\%)_i$ represents the percentage of the population (0-100) for observation i (a given country in a given year) that has access to clean fuel. $(GDP\_Per\_Capita)_i$ represents the GDP per capita (in 1000s) for observation i. $(Year)_i$ represents the year observation i was taken.  
+
+# Exploratory Data Analysis
+
+For the Explanatory Data Analysis, a ggpairs plot was made to find correlation between all our variables. Population and year had no correlation to death, so they were ignored. So, for this analysis, only GDP per Capita and Clean Fuel Access % were investigated. 
+
+
+\begin{figure}[!h]
+  \begin{center}
+  \includegraphics[width=16cm, height=6cm]{plots/eda-8.png}
+  \end{center}
+  \caption{Correlation between Clean Fuel Access and GDP Per Capita}
+\end{figure}
+
+
+Clean Fuel and GDP have a positive correlation coefficient of 0.657, which is slightly above average. So as GDP increases, we can expect the availability of Clean Fuel to also increase since the nation will have more resources to spend. 
+
+
+\begin{figure}[!h]
+  \begin{center}
+  \includegraphics[width=16cm, height=6cm]{plots/eda-5.png}
+  \end{center}
+  \caption{Deviance Residuals vs. Clean Fuel Access Percent}
+\end{figure}
+
+\begin{figure}[!h]
+  \begin{center}
+  \includegraphics[width=16cm, height=6cm]{plots/eda-7.png}
+  \end{center}
+  \caption{Deviance Residuals vs. GDP Per Capita}
+\end{figure}
+
+\begin{figure}[!h]
+  \begin{center}
+  \includegraphics[width=16cm, height=6cm]{plots/eda-9.png}
+  \end{center}
+  \caption{Deviance Residuals vs. Fitted Values}
+\end{figure}
+
+
+From simply looking at the residual models against Clean Fuel and GDP, the relationship is good when Clean Fuel is closer and 0 and GDP closer to 100+. 
+
+There is a little flutter at the end of Clean Fuel and the data trends up. What could be the reason for that? From the histogram (see appendix), most countries reside in that area and they all have the same trend. The same can be said about the GDP plots where most countries reside at GDP <50 (see appendix). 
+
+With the focus being on Clean Fuel and GDP, we can pull from the above plot of Clean Fuel vs. GDP per Capita to try and help us. 
+ 
+From the abundance each line sees on the "head", Deaths = 1 sees 1710 occurrences while Deaths = 0 head is only 171, a tenth of the size. An helpful indicator of this is in the bias of the blue mean line being dragged once it gets all the way to the right. 
+
+Since we know that the residuals are bunched up in terms of Deaths = 1 and Deaths = 0,we can use that to look back on the Clean Fuel vs Residual and GDP vs Residual to see that when Death = 0, the residuals for Clean Fuel are far from 0 and not good, while trending to 0 as Clean Fuel also increases. For GDP, a little more work is needed to make a full assumption. 
+
+88.52% of the data for Deaths = 1 appear when residuals are 0 < residual < 0.75 and 81.02% show when residuals are 0 < residual < 0.50. Meaning, the vast majority are towards the residual line while from afar might seem like the data is more skewed than it is. 
+
+With Deaths = 1, it might make sense to see that when GDP is closer to 0, more deaths are present, showing a better residual and closer to 0 as well. As GDP increases, that fluttering of the data appears and that residual value rises. 
+
+With Deaths = 0, the same assumption can be made. Residuals are bad when Deaths = 0 when GDP is low but as GDP increases, the residuals come very close to 0 because more money relates to a better clean fuel access (as seen in the positive correlation plot), resulting in lower death numbers. 
+
+# Results
+
+Residual diagnostics suggest that the model fits the data reasonably well. The central concentration of residuals near zero and the symmetry in spread in the histogram support the conclusion that the model captures the main structure of the relationship between indoor air pollution deaths and the predictors.  
+
+\begin{figure}[!h]
+  \begin{center}
+  \includegraphics[width=14cm, height=4cm]{plots/results-2.png}
+  \end{center}
+  \caption{Histogram of Deviance Residuals}
+\end{figure}
+
+The deviance residuals plotted against fitted values reveal the expected S-shaped banding typical in logistic regression with binary outcomes.  
+
+\begin{figure}[!h]
+  \begin{center}
+  \includegraphics[width=14cm, height=4cm]{plots/results-1.png}
+  \end{center}
+  \caption{Deviance Residuals}
+\end{figure}
+
+The Q-Q plot of deviance residuals indicates moderate deviations from normality, particularly in the tails. However, since logistic regression does not require residuals to be normally distributed, this deviation does not hinder the validity of the model.  
+
+\begin{figure}[!h]
+  \begin{center}
+  \includegraphics[width=14cm, height=4cm]{plots/results-3.png}
+  \end{center}
+  \caption{QQ Plot for Normality of Deviance Residuals}
+\end{figure}
+  
+  
+Below is the output of our final model. The estimated coefficient for Clean Fuel Access Percent is about 21.67, which means that as the percent of the population that has accesses to clean fuel increases, so does the log odds of Deaths, which is a little counterintuitive. However, GDP-Per-Capita has a negative correlation with Deaths, which is pretty intuitive. It means that as the GDP-Per-Capita in a country increases, the log odds of Deaths decrease.  This may be due to the fact that higher GDP normally means higher quality infrastructure and ventilation systems. The Year covariate shows a positive correlation with Deaths, showing that over time the log odds of Deaths increase as well. The interaction variable between Clean-Fuel-Access and Year is negative meaning that over time, increasing Clean Fuel Access diminishes occurrences of indoor air pollution-related deaths. 
+
+```{r, echo=FALSE, message=FALSE, results='asis'}
+#get model coefficients
+coef_table <- as.matrix(bern_BIC$coefficients)
+colnames(coef_table) <- "Coefficient"
+
+#print table for model coefficients
+print(xtable(coef_table, caption="Final Model Coefficients", table.placement="!h"))
+```
+
+
+
+# Conclusions
+
+Our final model, selected using BIC-based stepwise regression, included: Clean Fuel Access (% of population), GDP per Capita (scaled), Year, and an interaction term: Clean Fuel Access * Year.  All terms in the final model were statistically significant at the 0.01 level. 
+
+Greater access to clean fuels is associated with a significantly higher probability of observing indoor air pollution-related deaths, which is contrary to what we expected. This may be related to the countries with high access to clean fuels, but continued occurrence of indoor air pollution-related deaths, as can be seen in the scatterplot of Clean Fuel Access vs. Deaths in our exploratory data analysis. 
+
+Higher GDP per capita is significantly associated with reduced mortality from indoor air pollution, suggesting that economic development helps facilitate both better access to clean fuels and other mitigating infrastructure. 
+
+The negative interaction between Clean Fuel Access and Year indicates that increases in Clean Fuel Access over time may actually contribute to eventual lowering of deaths. This appears to be more in line with our assumptions about the impacts of Clean Fuel Access. 
+
+The findings underscore the critical importance of economic growth as a means to combat the global health crisis of indoor air pollution. While we would expect clean fuel access to be a more direct and actionable lever for reducing mortality in low- and middle-income countries, our model seems to  see this as less impactful than economic growth. 
+
+Investments in infrastructure that deliver clean cooking and heating fuels to larger proportions of the population (particularly in developing regions) could lead to substantial gains in public health. Furthermore, policies that encourage economic growth may also be beneficial on this front.
+
+As a final note, a limitation in our model is the lack of independence since we have repeating observations of the same country across multiple years. As such, we must interpret these results with caution. Future work may be better able to corroborate these initial findings. 
+
+
+# References
+\setlength{\parindent}{-0.2in}
+\setlength{\leftskip}{0.2in}
+\setlength{\parskip}{12pt}
+\noindent
+
+Bruce, N, R Perez-Padilla, and R Albalak. 2024. “Indoor Air Pollution in Developing Countries: A Major Environmental and Public Health Challenge.” Bulletin of the World Health Organization 78 (9): 1078. https://pmc.ncbi.nlm.nih.gov/articles/PMC2560841/.  
+
+Department of Environmental Conservation. n.d. “Controlling Air Pollution from Motor Vehicles - NYDEC.” Dec.ny.gov. https://dec.ny.gov/environmental-protection/air-quality/controlling-motor-vehicle-pollution.  
+
+National Institute of Environmental Health Sciences. 2024. “Air Pollution and Your Health.” National Institute of Environmental Health Sciences. National Institute of Environmental Health Sciences. August 6, 2024. https://www.niehs.nih.gov/health/topics/agents/air-pollution.  
+
+US EPA, OAR. 2015. “Managing Air Quality - Air Pollutant Types.” US EPA. December 10, 2015. https://www.epa.gov/air-quality-management-process/managing-air-quality-air-pollutant-types.  
+
+World Economic Forum. 2024. “Indoor Air Pollution: What Causes It and How to Tackle It.” World Economic Forum. November 29, 2024. https://www.weforum.org/stories/2024/11/what-causes-indoor-air-pollution-sources-how-to-reduce/.   
+
+World Health Organization. 2024. “Household Air Pollution and Health.” Who.int. World Health Organization: WHO. October 16, 2024. https://www.who.int/news-room/fact-sheets/detail/household-air-pollution-and-health.  
+
+# Appendix
+
+```{r, echo=FALSE, message=FALSE, results='asis'}
+#fit original poisson model as a quasi-poisson
+original_poiss = glm(formula = Deaths_Per_100000 ~ Clean_Fuel_Access_Percent + 
+              GDP_Per_Capita + Year + Population, family = "quasipoisson", 
+            data = pollution_deaths)
+
+#get coefficient table
+coef_table <- as.matrix(original_poiss$coefficients)
+colnames(coef_table) <- "Coefficient"
+
+#get dispersion table
+disp_table <- as.matrix(summary(original_poiss)$dispersion)
+colnames(disp_table) <- "Dispersion"
+rownames(disp_table) <- "Quasi-Poisson Model"
+
+#print coefficient table
+print(xtable(coef_table, caption="Original Poisson Model Quasi-Poisson Coefficients"))
+print(xtable(disp_table, caption="Original Poisson Model Quasi-Poisson Dispersion"))
+
+```
+
+
+\begin{figure}[!h]
+  \begin{center}
+  \includegraphics[width=18cm, height=8cm]{plots/eda-1.pdf}
+  \end{center}
+  \caption{Paired Scatterplot of Covariates and Response}
+\end{figure}
+
+
+\begin{figure}[!h]
+  \begin{center}
+  \includegraphics[width=18cm, height=8cm]{plots/model-building-2.pdf}
+  \end{center}
+  \caption{Histogram of Clean Fuel Access Percent}
+\end{figure}
+
+
+\begin{figure}[!h]
+  \begin{center}
+  \includegraphics[width=18cm, height=8cm]{plots/model-building-4.pdf}
+  \end{center}
+  \caption{Histogram of GDP Per Capita}
+\end{figure}
+
+```{r, echo=FALSE, message=FALSE, results='asis'}
+#get coefficients for covariates
+coefficients = bern_BIC$coefficients[2:5]
+
+#make a table for change in odds of death
+coef_table <- matrix(c(coefficients, exp(coefficients)), ncol=2)
+colnames(coef_table) <- c("Coefficient", "Mult. Change in Odds of Death")
+rownames(coef_table) <- rownames(as.table(coefficients))   
+
+#print table for change in odds of death
+print(xtable(coef_table, caption="Multiplicative Change in Odds of Non-zero Death Rate for Unit Change in Each Covariate", table.placement="!h"))
+```
+
+
+```{r, echo=FALSE, message=FALSE, results='asis'}
+#get coefficients
+coefficients = bern_BIC$coefficients
+
+#get confidence intervals for each coefficient
+z_val = qnorm(1-(0.05/2))
+se = summary(bern_BIC)$coefficients[,'Std. Error']
+lower = coefficients - z_val*se
+upper = coefficients + z_val*se
+
+#make table for confidence intervals
+coef_table <- matrix(c(coefficients, lower, upper), ncol=3)
+colnames(coef_table) <- c("Coefficient", "Lower Bound", "Upper Bound")
+rownames(coef_table) <- rownames(as.table(coefficients))   
+
+#print table for confidence intervals for coefficients
+print(xtable(coef_table, caption="95 Percent Confidence Intervals for Estimated Coefficients", table.placement="!h"))
+```
+
+

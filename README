@@ -6,5 +6,6 @@ Guide:
 2. EDA-Process.Rmd is the original EDA, EDA-2.Rmd is the final EDA
 3. Residuals code.R is the results script
 4. plots is the folder containing all plots generated that will be used in the final report
+5. Report_Final.Rmd is the final report document
 
-Note: residuals-# and model-building-# plots were saved manually due to difficulties with pdf() printing in R (worked for Rmd files). 
+Note: residuals-# and model-building-# plots were saved manually (issues with pdf() for .R but not .Rmd files)
